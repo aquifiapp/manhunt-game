@@ -667,18 +667,19 @@ function applyVel(a,dt60){
   let cap=a.sprinting?SPRINT_MAX:MAX_SPEED;
   if(a.jukeBoostTmr>0)cap*=JUKE_SPEED_MULT;
   if(spd>cap){a.vx=(a.vx/spd)*cap;a.vy=(a.vy/spd)*cap;}
-  if(spd>0.5)a.facingAngle=Math.atan2(a.vy,a.vx);
+  /* Smooth facing angle to prevent spinning on wall bounces */
+  if(spd>0.5){const ta=Math.atan2(a.vy,a.vx);let da=ta-a.facingAngle;while(da>Math.PI)da-=2*Math.PI;while(da<-Math.PI)da+=2*Math.PI;a.facingAngle+=da*0.25;}
   const nx=a.x+a.vx*dt60,ny=a.y+a.vy*dt60;
-  if(canMv(nx,a.y,8,a.vx,a.vy))a.x=nx;else{a.vx*=-0.3;if(!canMv(a.x+1,a.y,8,1,0))a.x-=0.5;else if(!canMv(a.x-1,a.y,8,-1,0))a.x+=0.5;}
-  if(canMv(a.x,ny,8,a.vx,a.vy))a.y=ny;else{a.vy*=-0.3;if(!canMv(a.x,a.y+1,8,0,1))a.y-=0.5;else if(!canMv(a.x,a.y-1,8,0,-1))a.y+=0.5;}
+  if(canMv(nx,a.y,8,a.vx,a.vy))a.x=nx;else{a.vx=0;if(!canMv(a.x+1,a.y,8,1,0))a.x-=0.5;else if(!canMv(a.x-1,a.y,8,-1,0))a.x+=0.5;}
+  if(canMv(a.x,ny,8,a.vx,a.vy))a.y=ny;else{a.vy=0;if(!canMv(a.x,a.y+1,8,0,1))a.y-=0.5;else if(!canMv(a.x,a.y-1,8,0,-1))a.y+=0.5;}
   /* Jail boundary */
   if(jailed&&jailed.includes(a)){const dx=a.x-jail.x,dy=a.y-jail.y,d=Math.sqrt(dx*dx+dy*dy),lim=JAIL_R-10;if(d>lim){a.x=jail.x+(dx/d)*lim;a.y=jail.y+(dy/d)*lim;const dot=a.vx*(dx/d)+a.vy*(dy/d);if(dot>0){a.vx-=dot*(dx/d)*1.2;a.vy-=dot*(dy/d)*1.2;}}}
 }
 function steerTo(a,tx,ty,dt60,sprint){
   let dx=tx-a.x,dy=ty-a.y;const mag=Math.sqrt(dx*dx+dy*dy);if(mag<3)return;dx/=mag;dy/=mag;
   let acc=ACCEL*dt60;if(sprint)acc*=1.5;
-  /* Obstacle avoidance */
-  const probes=[24,40];let blocked=false;
+  /* Obstacle avoidance — probe close and far */
+  const probes=[10,24,40];let blocked=false;
   for(const p of probes){if(!canMv(a.x+dx*p,a.y+dy*p,8)){blocked=true;break;}}
   if(blocked){const baseAng=Math.atan2(dy,dx);const offsets=[0.4,-0.4,0.8,-0.8,1.2,-1.2,1.6,-1.6,2.0,-2.0,Math.PI];let bestAng=baseAng+Math.PI,bestScore=-Infinity;for(const off of offsets){const ang=baseAng+off,cx=Math.cos(ang),cy=Math.sin(ang);let ok=true;for(const p of probes){if(!canMv(a.x+cx*p,a.y+cy*p,8)){ok=false;break;}}if(!ok)continue;const score=cx*dx+cy*dy;if(score>bestScore){bestScore=score;bestAng=ang;}}dx=Math.cos(bestAng);dy=Math.sin(bestAng);}
   a.vx+=dx*acc;a.vy+=dy*acc;
@@ -763,7 +764,7 @@ function updateHiderAI(h,dt,dt60){
     if(h.state==='freeJail'){for(const s of allSeekers())if(dst(s,jail)<120&&dst(h,jail)<200){h.state='hide';break;}}
   }
   const mv=Math.abs(h.x-h.prevX)+Math.abs(h.y-h.prevY);h.prevX=h.x;h.prevY=h.y;
-  if(mv<0.05&&!(h.state==='hide'&&tileAt(h.x,h.y)===T_BUSH)){h.stuckTmr+=dt;if(h.stuckTmr>400){h.stuckTmr=0;h.patrolTmr=0;const op=findOpenDir(h.x,h.y,140,h.targetX,h.targetY);h.targetX=op.x;h.targetY=op.y;h.state='flee';h.fleeTmr=800;h.sprinting=h.stamina>10;}}else h.stuckTmr=0;
+  if(mv<0.05&&!(h.state==='hide'&&tileAt(h.x,h.y)===T_BUSH)){h.stuckTmr+=dt;if(h.stuckTmr>300){h.stuckTmr=0;h.patrolTmr=0;h.vx=0;h.vy=0;const op=findOpenDir(h.x,h.y,140,h.targetX,h.targetY);h.targetX=op.x;h.targetY=op.y;h.state='flee';h.fleeTmr=800;h.sprinting=h.stamina>10;}}else h.stuckTmr=0;
 }
 
 function updateSeekerAI(s,dt,dt60){
@@ -805,7 +806,7 @@ function updateSeekerAI(s,dt,dt60){
   }
   steerTo(s,s.targetX,s.targetY,dt60,s.sprinting);
   const mv=Math.abs(s.x-s.prevX)+Math.abs(s.y-s.prevY);s.prevX=s.x;s.prevY=s.y;
-  if(mv<0.05){s.stuckTmr+=dt;if(s.stuckTmr>400){s.stuckTmr=0;s.patrolTmr=0;const op=findOpenDir(s.x,s.y,160,s.targetX,s.targetY);s.targetX=op.x;s.targetY=op.y;s.state='search';s.sprinting=s.stamina>20;}}else s.stuckTmr=0;
+  if(mv<0.05){s.stuckTmr+=dt;if(s.stuckTmr>300){s.stuckTmr=0;s.patrolTmr=0;s.vx=0;s.vy=0;const op=findOpenDir(s.x,s.y,160,s.targetX,s.targetY);s.targetX=op.x;s.targetY=op.y;s.state='search';s.sprinting=s.stamina>20;}}else s.stuckTmr=0;
 }
 
 /* ═══════════════════════════════════════════════════════════════
