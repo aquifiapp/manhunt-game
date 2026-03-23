@@ -384,9 +384,9 @@ const SOLID = Object.freeze({[T_WALL]:true,[T_FENCE]:true,[T_WATER]:true});
 
 /* Vision & Fog */
 const HIDE_PHASE_S = 10;
-const NIGHT_FOG_INNER = 50, NIGHT_FOG_OUTER = 160;
-const DAY_FOG_INNER = 70, DAY_FOG_OUTER = 230;
-const NIGHT_VISION_MULT = 0.55;
+const NIGHT_FOG_INNER = 80, NIGHT_FOG_OUTER = 240;
+const DAY_FOG_INNER = 110, DAY_FOG_OUTER = 320;
+const NIGHT_VISION_MULT = 0.7;
 
 /* Noise & idle */
 const NOISE_SPRINT_RADIUS = 180, NOISE_DASH_RADIUS = 250;
@@ -1032,10 +1032,10 @@ function render(dt60){
   const fI=isNight?NIGHT_FOG_INNER:DAY_FOG_INNER,fO=isNight?NIGHT_FOG_OUTER:DAY_FOG_OUTER;
   const grad=c.createRadialGradient(fogX,fogY,fI,fogX,fogY,fO);
   grad.addColorStop(0,'rgba(0,0,0,0)');
-  grad.addColorStop(0.5,isNight?'rgba(0,0,15,0.4)':'rgba(0,0,0,0.15)');
-  grad.addColorStop(1,isNight?'rgba(0,0,10,0.95)':'rgba(0,0,0,0.88)');
+  grad.addColorStop(0.5,isNight?'rgba(0,0,15,0.25)':'rgba(0,0,0,0.08)');
+  grad.addColorStop(1,isNight?'rgba(0,0,10,0.85)':'rgba(0,0,0,0.7)');
   c.fillStyle=grad;c.fillRect(0,0,W,H);
-  if(isNight){c.fillStyle='rgba(8,12,30,0.12)';c.fillRect(0,0,W,H);}
+  if(isNight){c.fillStyle='rgba(8,12,30,0.06)';c.fillRect(0,0,W,H);}
 
   /* Off-screen arrows */
   if(cfgMode!=='infection')drawArrow(jail.x,jail.y,'#fb5','JAIL('+jailed.length+')',true);
