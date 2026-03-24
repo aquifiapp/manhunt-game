@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html><head><title>Export Logo</title></head>
+<body style="margin:0;background:#222;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh">
+<canvas id="cv" width="1024" height="1024" style="max-width:512px;max-height:512px"></canvas>
+<br>
+<a id="dl" download="manhunt-logo.png" style="color:#5bf;font:600 20px sans-serif;cursor:pointer">Click here to download PNG (1024x1024)</a>
+<script>
+var cv = document.getElementById('cv');
+var ctx = cv.getContext('2d');
+var W = 1024;
+
+// Rounded rect clip
+ctx.beginPath();
+ctx.moveTo(180, 0);
+ctx.lineTo(W - 180, 0);
+ctx.quadraticCurveTo(W, 0, W, 180);
+ctx.lineTo(W, W - 180);
+ctx.quadraticCurveTo(W, W, W - 180, W);
+ctx.lineTo(180, W);
+ctx.quadraticCurveTo(0, W, 0, W - 180);
+ctx.lineTo(0, 180);
+ctx.quadraticCurveTo(0, 0, 180, 0);
+ctx.closePath();
+ctx.clip();
+
+// Background gradient
+var bgGrad = ctx.createRadialGradient(512, 512, 0, 512, 512, 563);
+bgGrad.addColorStop(0, '#0c0c20');
+bgGrad.addColorStop(1, '#060610');
+ctx.fillStyle = bgGrad;
+ctx.fillRect(0, 0, W, W);
+
+// Subtle grid
+ctx.strokeStyle = 'rgba(85,187,255,0.06)';
+ctx.lineWidth = 0.5;
+[256, 512, 768].forEach(function(v){
+  ctx.beginPath(); ctx.moveTo(0, v); ctx.lineTo(W, v); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(v, 0); ctx.lineTo(v, W); ctx.stroke();
+});
+
+// Outer ring
+ctx.strokeStyle = 'rgba(85,187,255,0.5)';
+ctx.lineWidth = 3;
+ctx.beginPath(); ctx.arc(512, 440, 260, 0, Math.PI * 2); ctx.stroke();
+
+ctx.strokeStyle = 'rgba(85,187,255,0.15)';
+ctx.lineWidth = 1;
+ctx.setLineDash([8, 12]);
+ctx.beginPath(); ctx.arc(512, 440, 280, 0, Math.PI * 2); ctx.stroke();
+ctx.setLineDash([]);
+
+// Crosshair
+ctx.strokeStyle = '#ee4848';
+ctx.lineWidth = 2;
+ctx.globalAlpha = 0.7;
+ctx.shadowColor = '#ee4848';
+ctx.shadowBlur = 8;
+// Horizontal
+ctx.beginPath(); ctx.moveTo(330, 440); ctx.lineTo(470, 440); ctx.stroke();
+ctx.beginPath(); ctx.moveTo(554, 440); ctx.lineTo(694, 440); ctx.stroke();
+// Vertical
+ctx.beginPath(); ctx.moveTo(512, 258); ctx.lineTo(512, 398); ctx.stroke();
+ctx.beginPath(); ctx.moveTo(512, 482); ctx.lineTo(512, 622); ctx.stroke();
+// Center dot
+ctx.fillStyle = '#ee4848';
+ctx.beginPath(); ctx.arc(512, 440, 4, 0, Math.PI * 2); ctx.fill();
+// Corner brackets
+[[462,390,462,380,472,380],[562,390,562,380,552,380],[462,490,462,500,472,500],[562,490,562,500,552,500]].forEach(function(p){
+  ctx.beginPath(); ctx.moveTo(p[0],p[1]); ctx.lineTo(p[2],p[3]); ctx.lineTo(p[4],p[5]); ctx.stroke();
+});
+ctx.globalAlpha = 1;
+ctx.shadowBlur = 0;
+
+// Helper to draw agent blob
+function drawAgent(cx, cy, bodyColor, headColor, glowColor, eyeDir, arrowDir) {
+  ctx.save();
+  ctx.shadowColor = glowColor;
+  ctx.shadowBlur = 20;
+  // Shadow on ground
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.ellipse(cx, cy + 35, 50, 20, 0, 0, Math.PI * 2); ctx.fill();
+  // Body
+  ctx.fillStyle = bodyColor;
+  ctx.beginPath(); ctx.arc(cx, cy, 45, 0, Math.PI * 2); ctx.fill();
+  // Body highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.07)';
+  ctx.beginPath(); ctx.arc(cx - 10, cy - 15, 25, 0, Math.PI * 2); ctx.fill();
+  // Arms
+  ctx.strokeStyle = bodyColor;
+  ctx.lineWidth = 13;
+  ctx.lineCap = 'round';
+  if (arrowDir < 0) {
+    ctx.beginPath(); ctx.moveTo(cx - 28, cy - 8); ctx.lineTo(cx - 58, cy - 30); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + 28, cy - 8); ctx.lineTo(cx + 50, cy + 12); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.moveTo(cx - 28, cy - 8); ctx.lineTo(cx - 50, cy + 12); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + 28, cy - 8); ctx.lineTo(cx + 58, cy - 30); ctx.stroke();
+  }
+  // Head
+  ctx.fillStyle = headColor;
+  ctx.beginPath(); ctx.arc(cx, cy - 50, 33, 0, Math.PI * 2); ctx.fill();
+  // Head highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  ctx.beginPath(); ctx.arc(cx - 8, cy - 60, 15, 0, Math.PI * 2); ctx.fill();
+  // Eyes
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.beginPath(); ctx.arc(cx + eyeDir * -12, cy - 55, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + eyeDir * 6, cy - 55, 5, 0, Math.PI * 2); ctx.fill();
+  // Pupils
+  ctx.fillStyle = '#111';
+  ctx.beginPath(); ctx.arc(cx + eyeDir * -14, cy - 55, 2.5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + eyeDir * 4, cy - 55, 2.5, 0, Math.PI * 2); ctx.fill();
+  // Direction arrow
+  ctx.fillStyle = headColor;
+  ctx.globalAlpha = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(cx + arrowDir * 80, cy);
+  ctx.lineTo(cx + arrowDir * 56, cy + 18);
+  ctx.lineTo(cx + arrowDir * 56, cy - 18);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+// Hider (blue, fleeing left)
+drawAgent(380, 430, '#3388ff', '#55bbff', '#55bbff', 1, -1);
+
+// Seeker (red, chasing right)
+drawAgent(644, 430, '#cc2828', '#ee4848', '#ee4848', -1, 1);
+
+// Footprints
+ctx.globalAlpha = 0.3;
+ctx.fillStyle = '#f84';
+ctx.beginPath(); ctx.arc(310, 490, 6, 0, Math.PI * 2); ctx.fill();
+ctx.globalAlpha = 0.18;
+ctx.beginPath(); ctx.arc(285, 505, 5, 0, Math.PI * 2); ctx.fill();
+ctx.globalAlpha = 0.09;
+ctx.beginPath(); ctx.arc(258, 515, 4, 0, Math.PI * 2); ctx.fill();
+ctx.globalAlpha = 1;
+
+// Title text - "MAN" white, "HUNT" red
+ctx.textAlign = 'center';
+ctx.textBaseline = 'alphabetic';
+ctx.font = '900 120px Impact, "Arial Black", "Helvetica Neue", sans-serif';
+ctx.letterSpacing = '14px';
+
+// Measure to position MAN and HUNT as one word
+var manW = ctx.measureText('MAN').width;
+var huntW = ctx.measureText('HUNT').width;
+var totalW = manW + huntW;
+var startX = 512 - totalW / 2;
+
+// MAN in white with subtle glow
+ctx.shadowColor = 'rgba(85,187,255,0.4)';
+ctx.shadowBlur = 12;
+ctx.fillStyle = '#e8e8f0';
+ctx.textAlign = 'left';
+ctx.fillText('MAN', startX, 740);
+
+// HUNT in red with red glow
+ctx.shadowColor = '#ee4848';
+ctx.shadowBlur = 16;
+ctx.fillStyle = '#f55';
+ctx.fillText('HUNT', startX + manW, 740);
+
+ctx.shadowBlur = 0;
+
+// Underline accent
+var grad = ctx.createLinearGradient(220, 0, 804, 0);
+grad.addColorStop(0, 'rgba(85,187,255,0.8)');
+grad.addColorStop(0.5, 'rgba(51,136,255,0.3)');
+grad.addColorStop(1, 'rgba(238,72,72,0.8)');
+ctx.strokeStyle = grad;
+ctx.lineWidth = 3;
+ctx.globalAlpha = 0.7;
+ctx.beginPath(); ctx.moveTo(220, 762); ctx.lineTo(804, 762); ctx.stroke();
+ctx.globalAlpha = 1;
+
+// Tagline
+ctx.font = '300 28px "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+ctx.textAlign = 'center';
+ctx.letterSpacing = '10px';
+ctx.fillStyle = '#5bf';
+ctx.globalAlpha = 0.7;
+ctx.fillText('HIDE . SEEK . SURVIVE', 512, 800);
+ctx.globalAlpha = 1;
+
+// Vignette
+var vig = ctx.createRadialGradient(512, 512, 307, 512, 512, 512);
+vig.addColorStop(0, 'rgba(0,0,0,0)');
+vig.addColorStop(1, 'rgba(0,0,0,0.6)');
+ctx.fillStyle = vig;
+ctx.fillRect(0, 0, W, W);
+
+// Border
+ctx.restore();
+ctx.strokeStyle = 'rgba(85,187,255,0.15)';
+ctx.lineWidth = 2;
+ctx.beginPath();
+ctx.moveTo(180, 0);
+ctx.lineTo(W - 180, 0);
+ctx.quadraticCurveTo(W, 0, W, 180);
+ctx.lineTo(W, W - 180);
+ctx.quadraticCurveTo(W, W, W - 180, W);
+ctx.lineTo(180, W);
+ctx.quadraticCurveTo(0, W, 0, W - 180);
+ctx.lineTo(0, 180);
+ctx.quadraticCurveTo(0, 0, 180, 0);
+ctx.closePath();
+ctx.stroke();
+
+// Set download link
+document.getElementById('dl').href = cv.toDataURL('image/png');
+</script>
+</body>
+</html>
