@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Manhunt</title>
+<meta name="description" content="Hide. Seek. Survive. A top-down stealth game of cat and mouse.">
+<meta name="theme-color" content="#060610">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Manhunt">
+<meta property="og:description" content="Hide. Seek. Survive. A top-down stealth game of cat and mouse.">
+<meta property="og:image" content="https://aquifiapp.github.io/manhunt-game/logo.svg">
+<meta property="og:url" content="https://aquifiapp.github.io/manhunt-game/">
+<meta name="twitter:card" content="summary_large_image">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Orbitron:wght@700;800;900&display=swap');
 :root{
@@ -436,9 +444,16 @@ function findFar(pos,min){for(let i=0;i<500;i++){const p=findOpen();if(dst(p,pos
 function findBush(px,py){let best=null,bd=Infinity;const tx=(px/TILE)|0,ty=(py/TILE)|0;for(let dy=-12;dy<=12;dy++)for(let dx=-12;dx<=12;dx++){const nx=tx+dx,ny=ty+dy;if(nx>0&&ny>0&&nx<MAP_W-1&&ny<MAP_H-1&&map[ny][nx]===T_BUSH){const d=dx*dx+dy*dy;if(d<bd){const bx=nx*TILE+TILE/2,by=ny*TILE+TILE/2;if(los(px,py,bx,by)){bd=d;best={x:bx,y:by};}}}}return best;}
 function findBushDir(px,py,dirX,dirY){let best=null,bs=-Infinity;const tx=(px/TILE)|0,ty=(py/TILE)|0;for(let dy=-10;dy<=10;dy++)for(let dx=-10;dx<=10;dx++){const nx=tx+dx,ny=ty+dy;if(nx>0&&ny>0&&nx<MAP_W-1&&ny<MAP_H-1&&map[ny][nx]===T_BUSH){const bx=nx*TILE+TILE/2,by=ny*TILE+TILE/2;if(!los(px,py,bx,by))continue;const rx=bx-px,ry=by-py,rm=Math.sqrt(rx*rx+ry*ry)||1;const sc=(rx/rm)*dirX+(ry/rm)*dirY-rm/400;if(sc>bs){bs=sc;best={x:bx,y:by};}}}return best;}
 function findOpenDir(ax,ay,dist,prefX,prefY){
-  const angles=[];for(let i=0;i<12;i++)angles.push(i*Math.PI/6);
   let bestAng=0,bestScore=-Infinity;
-  for(const ang of angles){const cx=Math.cos(ang),cy=Math.sin(ang);let steps=0;for(let s=1;s<=3;s++){if(canMv(ax+cx*s*20,ay+cy*s*20,8))steps++;else break;}if(steps===0)continue;let score=steps*10;if(prefX!==undefined){const pdx=prefX-ax,pdy=prefY-ay,pm=Math.sqrt(pdx*pdx+pdy*pdy)||1;score+=cx*(pdx/pm)*5+cy*(pdy/pm)*5;}score+=Math.random()*3;if(score>bestScore){bestScore=score;bestAng=ang;}}
+  for(let i=0;i<16;i++){
+    const ang=i*Math.PI/8,cx=Math.cos(ang),cy=Math.sin(ang);
+    let steps=0;for(let s=1;s<=5;s++){if(canMv(ax+cx*s*16,ay+cy*s*16,8))steps++;else break;}
+    if(steps===0)continue;
+    let score=steps*8;
+    if(prefX!==undefined){const pdx=prefX-ax,pdy=prefY-ay,pm=Math.sqrt(pdx*pdx+pdy*pdy)||1;score+=cx*(pdx/pm)*4+cy*(pdy/pm)*4;}
+    score+=Math.random()*4;
+    if(score>bestScore){bestScore=score;bestAng=ang;}
+  }
   if(bestScore>-Infinity)return{x:ax+Math.cos(bestAng)*dist,y:ay+Math.sin(bestAng)*dist};
   return{x:ax+(Math.random()-0.5)*dist,y:ay+(Math.random()-0.5)*dist};
 }
@@ -653,7 +668,9 @@ function mkAgent(x,y,team){
     cosmeticShirt:'default', cosmeticShoes:'default',
     cosmeticGloves:'default', cosmeticJailbreakFx:'default',
     /* Internal timers */
-    _fpTimer:0, _envTimer:0, _noiseTmr:0
+    _fpTimer:0, _envTimer:0, _noiseTmr:0,
+    /* Steering memory — prevents oscillation */
+    _avoidAng:0, _avoidTmr:0, _spinHist:0
   };
 }
 
@@ -677,10 +694,35 @@ function applyVel(a,dt60){
 function steerTo(a,tx,ty,dt60,sprint){
   let dx=tx-a.x,dy=ty-a.y;const mag=Math.sqrt(dx*dx+dy*dy);if(mag<3)return;dx/=mag;dy/=mag;
   let acc=ACCEL*dt60;if(sprint)acc*=1.5;
-  /* Obstacle avoidance */
+  /* Decay avoidance timer */
+  if(a._avoidTmr>0)a._avoidTmr=Math.max(0,a._avoidTmr-dt60);
+  /* Obstacle avoidance with directional commitment */
   const probes=[24,40];let blocked=false;
   for(const p of probes){if(!canMv(a.x+dx*p,a.y+dy*p,8)){blocked=true;break;}}
-  if(blocked){const baseAng=Math.atan2(dy,dx);const offsets=[0.4,-0.4,0.8,-0.8,1.2,-1.2,1.6,-1.6,2.0,-2.0,Math.PI];let bestAng=baseAng+Math.PI,bestScore=-Infinity;for(const off of offsets){const ang=baseAng+off,cx=Math.cos(ang),cy=Math.sin(ang);let ok=true;for(const p of probes){if(!canMv(a.x+cx*p,a.y+cy*p,8)){ok=false;break;}}if(!ok)continue;const score=cx*dx+cy*dy;if(score>bestScore){bestScore=score;bestAng=ang;}}dx=Math.cos(bestAng);dy=Math.sin(bestAng);}
+  if(blocked){
+    /* If we already committed to an avoidance angle, keep it if still clear */
+    if(a._avoidTmr>0){
+      const cx=Math.cos(a._avoidAng),cy=Math.sin(a._avoidAng);
+      let still=true;for(const p of probes){if(!canMv(a.x+cx*p,a.y+cy*p,8)){still=false;break;}}
+      if(still){dx=cx;dy=cy;a.vx+=dx*acc;a.vy+=dy*acc;return;}
+      a._avoidTmr=0;/* committed dir now blocked, recalc */
+    }
+    const baseAng=Math.atan2(dy,dx);
+    const offsets=[0.4,-0.4,0.8,-0.8,1.2,-1.2,1.6,-1.6,2.0,-2.0,Math.PI];
+    let bestAng=baseAng+Math.PI,bestScore=-Infinity;
+    for(const off of offsets){
+      const ang=baseAng+off,cx=Math.cos(ang),cy=Math.sin(ang);
+      let ok=true;for(const p of probes){if(!canMv(a.x+cx*p,a.y+cy*p,8)){ok=false;break;}}
+      if(!ok)continue;
+      const score=cx*dx+cy*dy;
+      if(score>bestScore){bestScore=score;bestAng=ang;}
+    }
+    dx=Math.cos(bestAng);dy=Math.sin(bestAng);
+    /* Commit to this direction for several frames to prevent oscillation */
+    a._avoidAng=bestAng;a._avoidTmr=8;
+  }else{
+    a._avoidTmr=0;/* clear path — drop commitment */
+  }
   a.vx+=dx*acc;a.vy+=dy*acc;
 }
 function checkJuke(a,dt,inputDx,inputDy){
@@ -762,8 +804,11 @@ function updateHiderAI(h,dt,dt60){
     if(h.state==='freeJail'&&dst(h,jail)<JAIL_R)h.state='hide';
     if(h.state==='freeJail'){for(const s of allSeekers())if(dst(s,jail)<120&&dst(h,jail)<200){h.state='hide';break;}}
   }
+  /* Spin detection for hiders */
+  const hSpd=Math.sqrt(h.vx*h.vx+h.vy*h.vy);
+  if(hSpd>0.5){const hAng=Math.atan2(h.vy,h.vx);let had=hAng-h.facingAngle;while(had>Math.PI)had-=2*Math.PI;while(had<-Math.PI)had+=2*Math.PI;if(Math.abs(had)>0.8)h._spinHist++;else h._spinHist=Math.max(0,h._spinHist-1);}
   const mv=Math.abs(h.x-h.prevX)+Math.abs(h.y-h.prevY);h.prevX=h.x;h.prevY=h.y;
-  if(mv<0.05&&!(h.state==='hide'&&tileAt(h.x,h.y)===T_BUSH)){h.stuckTmr+=dt;if(h.stuckTmr>400){h.stuckTmr=0;h.patrolTmr=0;const op=findOpenDir(h.x,h.y,140,h.targetX,h.targetY);h.targetX=op.x;h.targetY=op.y;h.state='flee';h.fleeTmr=800;h.sprinting=h.stamina>10;}}else h.stuckTmr=0;
+  if((mv<0.05||h._spinHist>6)&&!(h.state==='hide'&&tileAt(h.x,h.y)===T_BUSH)){h.stuckTmr+=dt;if(h.stuckTmr>250){h.stuckTmr=0;h._spinHist=0;h._avoidTmr=0;h.patrolTmr=0;const op=findOpenDir(h.x,h.y,140,h.targetX,h.targetY);h.targetX=op.x;h.targetY=op.y;h.state='flee';h.fleeTmr=800;h.sprinting=h.stamina>10;}}else h.stuckTmr=0;
 }
 
 function updateSeekerAI(s,dt,dt60){
@@ -804,8 +849,11 @@ function updateSeekerAI(s,dt,dt60){
     }
   }
   steerTo(s,s.targetX,s.targetY,dt60,s.sprinting);
+  /* Spin detection: track facing angle changes */
+  const curAng=Math.atan2(s.vy,s.vx),spd=Math.sqrt(s.vx*s.vx+s.vy*s.vy);
+  if(spd>0.5){let ad=curAng-s.facingAngle;while(ad>Math.PI)ad-=2*Math.PI;while(ad<-Math.PI)ad+=2*Math.PI;if(Math.abs(ad)>0.8)s._spinHist++;else s._spinHist=Math.max(0,s._spinHist-1);}
   const mv=Math.abs(s.x-s.prevX)+Math.abs(s.y-s.prevY);s.prevX=s.x;s.prevY=s.y;
-  if(mv<0.05){s.stuckTmr+=dt;if(s.stuckTmr>400){s.stuckTmr=0;s.patrolTmr=0;const op=findOpenDir(s.x,s.y,160,s.targetX,s.targetY);s.targetX=op.x;s.targetY=op.y;s.state='search';s.sprinting=s.stamina>20;}}else s.stuckTmr=0;
+  if(mv<0.05||s._spinHist>6){s.stuckTmr+=dt;if(s.stuckTmr>250){s.stuckTmr=0;s._spinHist=0;s._avoidTmr=0;s.patrolTmr=0;const op=findOpenDir(s.x,s.y,160,s.targetX,s.targetY);s.targetX=op.x;s.targetY=op.y;s.state='search';s.sprinting=s.stamina>20;}}else s.stuckTmr=0;
 }
 
 /* ═══════════════════════════════════════════════════════════════
